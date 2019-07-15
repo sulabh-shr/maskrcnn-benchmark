@@ -50,17 +50,40 @@ def do_coco_evaluation(
         coco_results['keypoints'] = prepare_for_coco_keypoint(predictions, dataset)
 
     results = COCOResults(*iou_types)
+    
+    # Add per cat result dict
+    results_per_cat = OrderedDict()
+
     logger.info("Evaluating predictions")
     for iou_type in iou_types:
         with tempfile.NamedTemporaryFile() as f:
             file_path = f.name
             if output_folder:
                 file_path = os.path.join(output_folder, iou_type + ".json")
+
+            # Evaluate for each category
+            for catId in dataset.coco.getCatIds():
+                print(f'\n\nEvaluating for category {catId} : {dataset.coco.loadCats(catId)}')
+
+                results_per_cat[catId] = COCOResults(*iou_types)
+                res = evaluate_predictions_on_coco(
+                    dataset.coco, coco_results[iou_type], file_path, iou_type, catId)
+                results_per_cat[catId].update(res)
+
             res = evaluate_predictions_on_coco(
                 dataset.coco, coco_results[iou_type], file_path, iou_type
             )
             results.update(res)
-    logger.info(results)
+    
+    res_str = ""
+    for catId, res in results_per_cat.items():
+        res_str += f"\n\n{dataset.coco.loadCats(catId)[0]['name']:-^70}"
+        res_str += repr(res)
+
+    res_str += repr(results)
+    logger.info(res_str)
+
+    
     check_expected_results(results, expected_results, expected_results_sigma_tol)
     if output_folder:
         torch.save(results, os.path.join(output_folder, "coco_results.pth"))
@@ -235,12 +258,20 @@ def evaluate_box_proposals(
 
         ann_ids = dataset.coco.getAnnIds(imgIds=original_id)
         anno = dataset.coco.loadAnns(ann_ids)
-        gt_boxes = [obj["bbox"] for obj in anno if obj["iscrowd"] == 0]
+        
+        # FILTER ISCROWD OBJECTS
+        # gt_boxes = [obj["bbox"] for obj in anno if obj["iscrowd"] == 0]
+        gt_boxes = [obj["bbox"] for obj in anno]
+
+
         gt_boxes = torch.as_tensor(gt_boxes).reshape(-1, 4)  # guard against no boxes
         gt_boxes = BoxList(gt_boxes, (image_width, image_height), mode="xywh").convert(
             "xyxy"
         )
-        gt_areas = torch.as_tensor([obj["area"] for obj in anno if obj["iscrowd"] == 0])
+        # FILTER ISCROWD OBJECTS AREAS
+        # gt_areas = torch.as_tensor([obj["area"] for obj in anno if obj["iscrowd"] == 0])
+        gt_areas = torch.as_tensor([obj["area"] for obj in anno])
+
 
         if len(gt_boxes) == 0:
             continue
@@ -303,7 +334,7 @@ def evaluate_box_proposals(
 
 
 def evaluate_predictions_on_coco(
-    coco_gt, coco_results, json_result_file, iou_type="bbox"
+    coco_gt, coco_results, json_result_file, iou_type="bbox", catId=None
 ):
     import json
 
@@ -320,6 +351,14 @@ def evaluate_predictions_on_coco(
     coco_eval.evaluate()
     coco_eval.accumulate()
     coco_eval.summarize()
+
+    coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
+    if catId is not None:
+        coco_eval.params.catIds = [catId]
+    coco_eval.evaluate()
+    coco_eval.accumulate()
+    coco_eval.summarize()
+
     return coco_eval
 
 
@@ -367,10 +406,11 @@ class COCOResults(object):
         results = '\n'
         for task, metrics in self.results.items():
             results += 'Task: {}\n'.format(task)
-            metric_names = metrics.keys()
-            metric_vals = ['{:.4f}'.format(v) for v in metrics.values()]
-            results += (', '.join(metric_names) + '\n')
-            results += (', '.join(metric_vals) + '\n')
+            metric_names = ['{:<7}'.format(v) for v in  metrics.keys()]
+            metric_vals = ['{:.4f} '.format(v) for v in metrics.values()]
+            results += ('| '.join(metric_names) + '\n')
+            results += ('| '.join(metric_vals) + '\n')
+        results += "-"*70 + "\n"
         return results
 
 
