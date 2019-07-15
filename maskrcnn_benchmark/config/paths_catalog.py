@@ -103,12 +103,33 @@ class DatasetCatalog(object):
         "cityscapes_fine_instanceonly_seg_test_cocostyle": {
             "img_dir": "cityscapes/images",
             "ann_file": "cityscapes/annotations/instancesonly_filtered_gtFine_test.json"
-        }
+        },
+        "active_vision_coco_set_1_train": {
+            "data_dir": "active_vision",
+            "ann_file": "active_vision/coco_annotations/instances_set_1_train.json"
+        },
+        "active_vision_coco_set_1_test": {
+            "data_dir": "active_vision",
+            "ann_file": "active_vision/coco_annotations/instances_set_1_test.json"
+        },
+
     }
 
     @staticmethod
     def get(name):
-        if "coco" in name:
+        if "active_vision" in name:
+            data_dir = DatasetCatalog.DATA_DIR
+            attrs = DatasetCatalog.DATASETS[name]
+
+            if "coco" in name:
+                args = dict(
+                    root=os.path.join(data_dir, attrs["data_dir"]),
+                    ann_file=os.path.join(data_dir, attrs["ann_file"])
+                )
+                return dict(
+                    factory="ActiveVisionCOCODataset",
+                    args=args)
+        elif "coco" in name:
             data_dir = DatasetCatalog.DATA_DIR
             attrs = DatasetCatalog.DATASETS[name]
             args = dict(
@@ -181,7 +202,8 @@ class ModelCatalog(object):
         # we use as identifiers in the catalog Caffe2Detectron/COCO/<model_id>/<model_name>
         prefix = ModelCatalog.S3_C2_DETECTRON_URL
         dataset_tag = "keypoints_" if "keypoint" in name else ""
-        suffix = ModelCatalog.C2_DETECTRON_SUFFIX.format(dataset_tag, dataset_tag)
+        suffix = ModelCatalog.C2_DETECTRON_SUFFIX.format(dataset_tag,
+                                                         dataset_tag)
         # remove identification prefix
         name = name[len("Caffe2Detectron/COCO/"):]
         # split in <model_id> and <model_name>
@@ -190,5 +212,6 @@ class ModelCatalog(object):
         model_name = "{}.yaml".format(model_name)
         signature = ModelCatalog.C2_DETECTRON_MODELS[name]
         unique_name = ".".join([model_name, signature])
-        url = "/".join([prefix, model_id, "12_2017_baselines", unique_name, suffix])
+        url = "/".join(
+            [prefix, model_id, "12_2017_baselines", unique_name, suffix])
         return url
