@@ -117,8 +117,8 @@ class ActiveVisionCOCODataset(torchvision.datasets.coco.CocoDetection):
         img = Image.open(img_path)
 
         anno = target
-        if self.transforms is not None:
-            img, anno = self.transforms(img, target)
+        # if self.transforms is not None:
+        #     img, anno = self.transforms(img, target)
 
         # anno = [obj for obj in anno if obj["iscrowd"] == 0]
 
