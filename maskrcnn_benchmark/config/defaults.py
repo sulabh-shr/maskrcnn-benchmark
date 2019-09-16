@@ -60,6 +60,8 @@ _C.INPUT.CONTRAST = 0.0
 _C.INPUT.SATURATION = 0.0
 _C.INPUT.HUE = 0.0
 
+# Probability of flipping image horizontally and vertically during training
+_C.INPUT.FLIP_PROB_TRAIN = 0.0
 _C.INPUT.VERTICAL_FLIP_PROB_TRAIN = 0.0
 
 # -----------------------------------------------------------------------------
