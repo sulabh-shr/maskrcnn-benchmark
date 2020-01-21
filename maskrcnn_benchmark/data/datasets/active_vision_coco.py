@@ -69,8 +69,8 @@ class ActiveVisionCOCODataset(torchvision.datasets.coco.CocoDetection):
     # }
 
     def __init__(
-        self, root, ann_file, remove_images_without_annotations=True, transforms=None, use_difficult=True
-    ):
+        self, root, ann_file, remove_images_without_annotations=False, transforms=None, use_difficult=True
+        ):
         super(ActiveVisionCOCODataset, self).__init__(root, ann_file)
         # sort indices for reproducible results
         self.ids = sorted(self.ids)
@@ -103,7 +103,7 @@ class ActiveVisionCOCODataset(torchvision.datasets.coco.CocoDetection):
         self.id_to_img_map = {k: v for k, v in enumerate(self.ids)}
         self._transforms = transforms
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx, get_filename=True):
         # load the image as a PIL Image
 
         coco = self.coco
@@ -147,7 +147,8 @@ class ActiveVisionCOCODataset(torchvision.datasets.coco.CocoDetection):
             img, target = self._transforms(img, target)
 
         # print(f'Index {idx:<5} : {file_name} of {folder_name:<12} has labels {classes}')
-
+        if get_filename:
+            return img, target, (idx, file_name)
         return img, target, idx
 
     def get_img_info(self, index):

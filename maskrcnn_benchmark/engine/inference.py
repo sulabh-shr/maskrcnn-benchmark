@@ -6,6 +6,8 @@ import os
 import torch
 from tqdm import tqdm
 
+import pickle
+
 from maskrcnn_benchmark.config import cfg
 from maskrcnn_benchmark.data.datasets.evaluation import evaluate
 from ..utils.comm import is_main_process, get_world_size
@@ -18,16 +20,25 @@ from .bbox_aug import im_detect_bbox_aug
 def compute_on_dataset(model, data_loader, device, timer=None):
     model.eval()
     results_dict = {}
+
     cpu_device = torch.device("cpu")
+    
+    print(f'NUMBER OF ITERATIONS = {len(data_loader)}')
     for _, batch in enumerate(tqdm(data_loader)):
-        images, targets, image_ids = batch
+        # images, targets, image_ids = batch
+        images, targets, id_filenames = batch
+
+        # image_ids = tuple(i[0] for i in id_filenames)
+        filenames = tuple(i[1] for i in id_filenames)
+
         with torch.no_grad():
             if timer:
                 timer.tic()
             if cfg.TEST.BBOX_AUG.ENABLED:
                 output = im_detect_bbox_aug(model, images, device)
             else:
-                output = model(images.to(device))
+                # output = model(images.to(device))
+                output = model(images.to(device), filenames=filenames)
             if timer:
                 if not cfg.MODEL.DEVICE == 'cpu':
                     torch.cuda.synchronize()
