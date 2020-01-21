@@ -2,6 +2,10 @@
 import torch
 from torch import nn
 
+import pickle
+from time import time
+from collections import defaultdict
+
 from .roi_box_feature_extractors import make_roi_box_feature_extractor
 from .roi_box_predictors import make_roi_box_predictor
 from .inference import make_roi_box_post_processor
@@ -45,11 +49,24 @@ class ROIBoxHead(torch.nn.Module):
         # extract features that will be fed to the final classifier. The
         # feature_extractor generally corresponds to the pooler + heads
         x = self.feature_extractor(features, proposals)
+        
+        # print("*"*70)
+        # print(f'Proposals size : \t {len(proposals)} images')                     # batch_size
+        # print(f'Proposal[0]    : \t {proposals[0]}')                       # First image in batch proposal
+        # print(f'Feature extractor output size : \t {x.shape}')             # batch_size * num_proposals_per_img, depth, ft_w, ft_h
+        # print(x[0].shape)
         # final classifier that converts the features into predictions
         class_logits, box_regression = self.predictor(x)
+        
+        # print(f'Logits size : \t {class_logits.shape}')    # batch_size * num_proposals_per_img, num_classes
 
         if not self.training:
             result = self.post_processor((class_logits, box_regression), proposals)
+
+            # print(result[0].get_field("scores"))
+            # print(result[0].get_field("labels"))
+            # print(result[0].get_field("proposal_idx"))
+            
             return x, result, {}
 
         loss_classifier, loss_box_reg = self.loss_evaluator(

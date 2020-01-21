@@ -61,7 +61,7 @@ class PostProcessor(nn.Module):
         image_shapes = [box.size for box in boxes]
         boxes_per_image = [len(box) for box in boxes]
         concat_boxes = torch.cat([a.bbox for a in boxes], dim=0)
-
+        
         if self.cls_agnostic_bbox_reg:
             box_regression = box_regression[:, -4:]
         proposals = self.box_coder.decode(
@@ -79,11 +79,17 @@ class PostProcessor(nn.Module):
         for prob, boxes_per_img, image_shape in zip(
             class_prob, proposals, image_shapes
         ):
+            # print(f'Prob          : {prob.shape}')                            # Num_proposals, num_classes
+            # print(f'proposal for image : {boxes_per_img.shape}')             # Num_proposals, bbox_offset_pred = 4 * num_classes
             boxlist = self.prepare_boxlist(boxes_per_img, prob, image_shape)
+            # print(f"boxlist: {boxlist}")    # Num_boxes = num_proposals_per_img * num_classes because different bbox value for each class
             boxlist = boxlist.clip_to_image(remove_empty=False)
+
             if not self.bbox_aug_enabled:  # If bbox aug is enabled, we will do it later
                 boxlist = self.filter_results(boxlist, num_classes)
+            
             results.append(boxlist)
+        
         return results
 
     def prepare_boxlist(self, boxes, scores, image_shape):
@@ -119,12 +125,19 @@ class PostProcessor(nn.Module):
         # Apply threshold on detection probabilities and apply NMS
         # Skip j = 0, because it's the background class
         inds_all = scores > self.score_thresh
+
         for j in range(1, num_classes):
-            inds = inds_all[:, j].nonzero().squeeze(1)
-            scores_j = scores[inds, j]
-            boxes_j = boxes[inds, j * 4 : (j + 1) * 4]
+            # Proposal index wwhich have scores greater than threshold for current class
+            inds = inds_all[:, j].nonzero().squeeze(1)             # all rows which have non-zero j-column value
+            # Scores of proposals which are greater than threshold score
+            scores_j = scores[inds, j]                             # all non-zero values (higher than thresh scores) of j-column
+            # BBox offsets of proposals which have scores greater than threshold
+            boxes_j = boxes[inds, j * 4 : (j + 1) * 4]             # all bbox offsets corresponding to non-zero value (higher than thresh scores)
             boxlist_for_class = BoxList(boxes_j, boxlist.size, mode="xyxy")
+            
             boxlist_for_class.add_field("scores", scores_j)
+            boxlist_for_class.add_field("proposal_idx", inds)
+            
             boxlist_for_class = boxlist_nms(
                 boxlist_for_class, self.nms
             )
@@ -132,9 +145,11 @@ class PostProcessor(nn.Module):
             boxlist_for_class.add_field(
                 "labels", torch.full((num_labels,), j, dtype=torch.int64, device=device)
             )
-            result.append(boxlist_for_class)
+            
+            result.append(boxlist_for_class)    
 
         result = cat_boxlist(result)
+        
         number_of_detections = len(result)
 
         # Limit to max_per_image detections **over all classes**
@@ -146,6 +161,8 @@ class PostProcessor(nn.Module):
             keep = cls_scores >= image_thresh.item()
             keep = torch.nonzero(keep).squeeze(1)
             result = result[keep]
+
+
         return result
 
 
